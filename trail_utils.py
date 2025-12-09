@@ -52,6 +52,8 @@ def load_fit(file):
         df['slope_raw'] = (df['delta_alt'] / df['delta_dist']) * 100
         df['slope_smooth'] = df['slope_raw'].rolling(window=25, center=True).mean()
         df['slope_smooth'] = df['slope_smooth'].clip(-50, 30).fillna(0)
+    
+    return df
 
 
 def calculate_energy_cost(slope_percent):
