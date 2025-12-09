@@ -10,8 +10,18 @@ st.set_page_config(page_title='Trail Analysis', layout='wide')
 
 
 @st.cache_data
-def load_and_preprocess(uploaded_file):
+def _cached_preprocess(uploaded_file):
+    # internal cached function that may raise; wrapper handles user-friendly errors
     return preprocess_all(uploaded_file)
+
+
+def load_and_preprocess(uploaded_file):
+    try:
+        return _cached_preprocess(uploaded_file)
+    except Exception as e:
+        # Show a friendly error to the user in the app
+        st.error(f"Failed to preprocess FIT file: {e}")
+        return None
 
 
 def plot_slope_speed_scatter(df):
@@ -115,20 +125,28 @@ def main():
 
     df = load_and_preprocess(uploaded)
 
+    if df is None:
+        st.info('No valid data available from the uploaded file.')
+        return
+
     st.sidebar.markdown(f"Data points: **{len(df)}**")
 
     if analysis == 'Scatter Slope/Speed':
         fig = plot_slope_speed_scatter(df)
-        st.pyplot(fig)
+        if fig is not None:
+            st.pyplot(fig)
     elif analysis == 'Effort Km':
         fig = plot_effort_vs_terrain(df)
-        st.pyplot(fig)
+        if fig is not None:
+            st.pyplot(fig)
     elif analysis == 'Heat Buildup':
         fig = plot_heat_buildup(df)
-        st.pyplot(fig)
+        if fig is not None:
+            st.pyplot(fig)
     elif analysis == 'Pace Heatmap':
         fig = plot_pace_heatmap(df)
-        st.pyplot(fig)
+        if fig is not None:
+            st.pyplot(fig)
     else:
         st.dataframe(df.head(200))
 

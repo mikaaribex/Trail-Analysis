@@ -1,16 +1,23 @@
 import io
+import logging
 import numpy as np
 import pandas as pd
 from fitparse import FitFile
+
+logger = logging.getLogger(__name__)
 
 
 def load_fit(file):
     """Load a FIT file (path or file-like) and return a cleaned DataFrame."""
     # Accept either a path or a file-like object (e.g., uploaded BytesIO)
-    if hasattr(file, 'read'):
-        fitfile = FitFile(file)
-    else:
-        fitfile = FitFile(str(file))
+    try:
+        if hasattr(file, 'read'):
+            fitfile = FitFile(file)
+        else:
+            fitfile = FitFile(str(file))
+    except Exception as exc:
+        logger.exception("Failed to open FIT file")
+        raise ValueError(f"Failed to parse FIT file: {exc}") from exc
 
     data_points = []
     for record in fitfile.get_messages('record'):
@@ -20,6 +27,11 @@ def load_fit(file):
         data_points.append(record_data)
 
     df = pd.DataFrame(data_points)
+
+    if df.empty:
+        # No records parsed from the FIT file; return empty DataFrame for caller to handle
+        logger.warning("Parsed FIT file but no record messages were found (empty DataFrame)")
+        return df
 
     # Convert positions
     if 'position_lat' in df.columns and 'position_long' in df.columns:
@@ -63,20 +75,40 @@ def calculate_energy_cost(slope_percent):
 
 
 def enrich_energy(df):
+    if not isinstance(df, pd.DataFrame):
+        raise ValueError('enrich_energy expects a pandas DataFrame')
+
     if 'slope_smooth' in df.columns:
         df['energy_cost'] = df['slope_smooth'].apply(calculate_energy_cost)
+    else:
+        logger.debug('Skipping energy enrichment: "slope_smooth" column not present')
+
     if 'enhanced_speed' in df.columns and 'energy_cost' in df.columns:
         df['gap_speed'] = df['enhanced_speed'] * df['energy_cost']
+    else:
+        logger.debug('Skipping gap_speed computation: required columns missing')
 
 
 def ensure_cadence_spm(df):
+    if not isinstance(df, pd.DataFrame):
+        raise ValueError('ensure_cadence_spm expects a pandas DataFrame')
+
     if 'cadence' in df.columns:
         if df['cadence'].median() < 100:
             df['cadence'] = df['cadence'] * 2
+    else:
+        logger.debug('No cadence column found; skipping cadence normalization')
 
 
 def preprocess_all(file):
     df = load_fit(file)
+
+    if df is None or not isinstance(df, pd.DataFrame):
+        raise ValueError('load_fit did not return a pandas DataFrame')
+
+    if df.empty:
+        raise ValueError('No records found in FIT file after parsing; please check the file')
+
     enrich_energy(df)
     ensure_cadence_spm(df)
     return df
