@@ -4,3 +4,5 @@ numpy
 matplotlib
 seaborn
 fitparse
+nbformat>=4.2.0
+plotly
